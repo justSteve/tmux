@@ -1,0 +1,3 @@
+issue_prefix: tx
+issue-prefix: tx
+dolt.auto-start: false
