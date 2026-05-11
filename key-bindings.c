@@ -29,7 +29,8 @@
 	" 'Previous' 'p' {switch-client -p}" \
 	" ''" \
 	" 'Renumber' 'N' {move-window -r}" \
-	" 'Rename' 'n' {command-prompt -I \"#S\" {rename-session -- '%%'}}" \
+	" 'Rename' 'r' {command-prompt -I \"#S\" {rename-session -- '%%'}}" \
+	" 'Detach' 'd' {detach-client}" \
 	" ''" \
 	" 'New Session' 's' {new-session}" \
 	" 'New Window' 'w' {new-window}"
@@ -215,6 +216,7 @@ key_bindings_add(const char *name, key_code key, const char *note, int repeat,
 
 	bd = xcalloc(1, sizeof *bd);
 	bd->key = (key & ~KEYC_MASK_FLAGS);
+	bd->tablename = table->name;
 	if (note != NULL)
 		bd->note = xstrdup(note);
 	RB_INSERT(key_bindings, &table->key_bindings, bd);
@@ -465,6 +467,10 @@ key_bindings_init(void)
 		"bind -n MouseDown1Status { switch-client -t= }",
 		"bind -n C-MouseDown1Status { swap-window -t@ }",
 
+		/* Mouse button 1 down on default pane-border-format */
+		"bind -n MouseDown1Control9 { display-menu -t= -xM -yM -O -T 'Kill pane #{pane_index}?' 'Yes' 'y' { kill-pane -t= } 'No' 'n' {}}",
+		"bind -n MouseDown1Control8 { resize-pane -Z }",
+
 		/* Mouse wheel down on status line. */
 		"bind -n WheelDownStatus { next-window }",
 
@@ -497,7 +503,7 @@ key_bindings_init(void)
 		"bind -Tcopy-mode C-b { send -X cursor-left }",
 		"bind -Tcopy-mode C-g { send -X clear-selection }",
 		"bind -Tcopy-mode C-k { send -X copy-pipe-end-of-line-and-cancel }",
-		"bind -Tcopy-mode C-l { send -X cursor-centre-vertical }",
+		"bind -Tcopy-mode C-l { send -X recentre-top-bottom }",
 		"bind -Tcopy-mode M-l { send -X cursor-centre-horizontal }",
 		"bind -Tcopy-mode C-n { send -X cursor-down }",
 		"bind -Tcopy-mode C-p { send -X cursor-up }",
@@ -506,6 +512,7 @@ key_bindings_init(void)
 		"bind -Tcopy-mode C-v { send -X page-down }",
 		"bind -Tcopy-mode C-w { send -X copy-pipe-and-cancel }",
 		"bind -Tcopy-mode Escape { send -X cancel }",
+		"bind -Tcopy-mode C-[ { send -X cancel }",
 		"bind -Tcopy-mode Space { send -X page-down }",
 		"bind -Tcopy-mode , { send -X jump-reverse }",
 		"bind -Tcopy-mode \\; { send -X jump-again }",
@@ -579,6 +586,7 @@ key_bindings_init(void)
 		"bind -Tcopy-mode-vi C-v { send -X rectangle-toggle }",
 		"bind -Tcopy-mode-vi C-y { send -X scroll-up }",
 		"bind -Tcopy-mode-vi Escape { send -X clear-selection }",
+		"bind -Tcopy-mode-vi C-[ { send -X clear-selection }",
 		"bind -Tcopy-mode-vi Space { send -X begin-selection }",
 		"bind -Tcopy-mode-vi '$' { send -X end-of-line }",
 		"bind -Tcopy-mode-vi , { send -X jump-reverse }",
@@ -687,6 +695,7 @@ key_bindings_dispatch(struct key_binding *bd, struct cmdq_item *item,
 		readonly = 1;
 	else
 		readonly = cmd_list_all_have(bd->cmdlist, CMD_READONLY);
+
 	if (!readonly)
 		new_item = cmdq_get_callback(key_bindings_read_only, NULL);
 	else {
@@ -701,4 +710,16 @@ key_bindings_dispatch(struct key_binding *bd, struct cmdq_item *item,
 	else
 		new_item = cmdq_append(c, new_item);
 	return (new_item);
+}
+
+int
+key_bindings_has_repeat(struct key_binding **l, u_int n)
+{
+	u_int	i;
+
+	for (i = 0; i < n; i++) {
+		if (l[i]->flags & KEY_BINDING_REPEAT)
+			return (1);
+	}
+	return (0);
 }

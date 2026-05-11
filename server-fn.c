@@ -96,7 +96,9 @@ server_redraw_window(struct window *w)
 	struct client	*c;
 
 	TAILQ_FOREACH(c, &clients, entry) {
-		if (c->session != NULL && c->session->curw->window == w)
+		if (c->session != NULL &&
+		    c->session->curw != NULL &&
+		    c->session->curw->window == w)
 			server_redraw_client(c);
 	}
 }
@@ -107,7 +109,9 @@ server_redraw_window_borders(struct window *w)
 	struct client	*c;
 
 	TAILQ_FOREACH(c, &clients, entry) {
-		if (c->session != NULL && c->session->curw->window == w)
+		if (c->session != NULL &&
+		    c->session->curw != NULL &&
+		    c->session->curw->window == w)
 			c->flags |= CLIENT_REDRAWBORDERS;
 	}
 }
@@ -340,6 +344,7 @@ server_destroy_pane(struct window_pane *wp, int notify)
 			break;
 		/* FALLTHROUGH */
 	case 1:
+	case 3:
 		if (wp->flags & PANE_STATUSDRAWN)
 			return;
 		wp->flags |= PANE_STATUSDRAWN;

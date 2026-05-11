@@ -41,6 +41,10 @@ endif
 AM_CPPFLAGS += -DDEBUG
 endif
 AM_CPPFLAGS += -iquote.
+if IS_ASAN
+AM_CFLAGS += -fsanitize=address
+AM_LDFLAGS += -fsanitize=address
+endif
 endif
 
 # Set flags for Solaris.
@@ -106,6 +110,7 @@ dist_tmux_SOURCES = \
 	cmd-kill-window.c \
 	cmd-list-buffers.c \
 	cmd-list-clients.c \
+	cmd-list-commands.c \
 	cmd-list-keys.c \
 	cmd-list-panes.c \
 	cmd-list-sessions.c \
@@ -236,9 +241,19 @@ dist_tmux_SOURCES += image.c image-sixel.c
 endif
 
 if NEED_FUZZING
-check_PROGRAMS = fuzz/input-fuzzer
+check_PROGRAMS = \
+	fuzz/input-fuzzer \
+	fuzz/cmd-parse-fuzzer \
+	fuzz/format-fuzzer \
+	fuzz/style-fuzzer
 fuzz_input_fuzzer_LDFLAGS = $(FUZZING_LIBS)
 fuzz_input_fuzzer_LDADD = $(LDADD) $(tmux_OBJECTS)
+fuzz_cmd_parse_fuzzer_LDFLAGS = $(FUZZING_LIBS)
+fuzz_cmd_parse_fuzzer_LDADD = $(LDADD) $(tmux_OBJECTS)
+fuzz_format_fuzzer_LDFLAGS = $(FUZZING_LIBS)
+fuzz_format_fuzzer_LDADD = $(LDADD) $(tmux_OBJECTS)
+fuzz_style_fuzzer_LDFLAGS = $(FUZZING_LIBS)
+fuzz_style_fuzzer_LDADD = $(LDADD) $(tmux_OBJECTS)
 endif
 
 # Install tmux.1 in the right format.

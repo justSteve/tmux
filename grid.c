@@ -200,14 +200,22 @@ grid_adjust_lines(struct grid *gd, u_int lines)
 
 /* Copy default into a cell. */
 static void
-grid_clear_cell(struct grid *gd, u_int px, u_int py, u_int bg)
+grid_clear_cell(struct grid *gd, u_int px, u_int py, u_int bg, int moved)
 {
 	struct grid_line	*gl = &gd->linedata[py];
 	struct grid_cell_entry	*gce = &gl->celldata[px];
 	struct grid_extd_entry	*gee;
+	u_int			 old_offset = gce->offset;
+	int			 had_extd = (gce->flags & GRID_FLAG_EXTENDED);
 
 	memcpy(gce, &grid_cleared_entry, sizeof *gce);
-	if (bg != 8) {
+	if (!moved && had_extd && old_offset < gl->extdsize) {
+		gce->flags |= GRID_FLAG_EXTENDED;
+		gce->offset = old_offset;
+		gee = grid_extended_cell(gl, gce, &grid_cleared_cell);
+		if (bg != 8)
+			gee->bg = bg;
+	} else if (bg != 8) {
 		if (bg & COLOUR_FLAG_RGB) {
 			grid_get_extended_cell(gl, gce, gce->flags);
 			gee = grid_extended_cell(gl, gce, &grid_cleared_cell);
@@ -500,9 +508,14 @@ grid_expand_line(struct grid *gd, u_int py, u_int sx, u_int bg)
 	else if (gd->sx > sx)
 		sx = gd->sx;
 
-	gl->celldata = xreallocarray(gl->celldata, sx, sizeof *gl->celldata);
+	gl->celldata = xreallocarray(gl->celldata, sx,
+	    sizeof *gl->celldata);
+	if (gl->cellsize < sx) {
+		memset(gl->celldata + gl->cellsize, 0,
+		    (sx - gl->cellsize) * sizeof *gl->celldata);
+	}
 	for (xx = gl->cellsize; xx < sx; xx++)
-		grid_clear_cell(gd, xx, py, bg);
+		grid_clear_cell(gd, xx, py, bg, 0);
 	gl->cellsize = sx;
 }
 
@@ -670,7 +683,7 @@ grid_clear(struct grid *gd, u_int px, u_int py, u_int nx, u_int ny, u_int bg)
 
 		grid_expand_line(gd, yy, px + ox, 8); /* default bg first */
 		for (xx = px; xx < px + ox; xx++)
-			grid_clear_cell(gd, xx, yy, bg);
+			grid_clear_cell(gd, xx, yy, bg, 0);
 	}
 }
 
@@ -764,7 +777,7 @@ grid_move_cells(struct grid *gd, u_int dx, u_int px, u_int py, u_int nx,
 	for (xx = px; xx < px + nx; xx++) {
 		if (xx >= dx && xx < dx + nx)
 			continue;
-		grid_clear_cell(gd, xx, py, bg);
+		grid_clear_cell(gd, xx, py, bg, 1);
 	}
 }
 
@@ -1089,18 +1102,22 @@ grid_string_cells(struct grid *gd, u_int px, u_int py, u_int nx,
 	off = 0;
 
 	gl = grid_peek_line(gd, py);
+	if (gl == NULL) {
+		buf[0] = '\0';
+		return (buf);
+	}
 	if (flags & GRID_STRING_EMPTY_CELLS)
 		end = gl->cellsize;
 	else
 		end = gl->cellused;
 	for (xx = px; xx < px + nx; xx++) {
-		if (gl == NULL || xx >= end)
+		if (xx >= end)
 			break;
 		grid_get_cell(gd, xx, py, &gc);
 		if (gc.flags & GRID_FLAG_PADDING)
 			continue;
 
-		if (flags & GRID_STRING_WITH_SEQUENCES) {
+		if (lastgc != NULL && (flags & GRID_STRING_WITH_SEQUENCES)) {
 			grid_string_cells_code(*lastgc, &gc, code, sizeof code,
 			    flags, s, &has_link);
 			codelen = strlen(code);

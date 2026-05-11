@@ -90,6 +90,7 @@ menu_add_item(struct menu *menu, const struct menu_item *item,
 	else
 		s = format_single(qitem, item->name, c, NULL, NULL, NULL);
 	if (*s == '\0') { /* no item if empty after format expanded */
+		free(s);
 		menu->count--;
 		return;
 	}
@@ -160,6 +161,9 @@ void
 menu_free(struct menu *menu)
 {
 	u_int	i;
+
+	if (menu == NULL)
+		return;
 
 	for (i = 0; i < menu->count; i++) {
 		free((void *)menu->items[i].name);
@@ -359,7 +363,7 @@ menu_key_cb(struct client *c, void *data, struct key_event *event)
 		name = menu->items[i].name;
 		if (name == NULL || *name == '-')
 			continue;
-		if (event->key == menu->items[i].key) {
+		if ((event->key & ~KEYC_MASK_FLAGS) == menu->items[i].key) {
 			md->choice = i;
 			goto chosen;
 		}
@@ -467,6 +471,7 @@ menu_key_cb(struct client *c, void *data, struct key_event *event)
 	case '\r':
 		goto chosen;
 	case '\033': /* Escape */
+	case '['|KEYC_CTRL:
 	case 'c'|KEYC_CTRL:
 	case 'g'|KEYC_CTRL:
 	case 'q':

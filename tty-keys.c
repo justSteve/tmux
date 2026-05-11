@@ -1310,7 +1310,7 @@ tty_keys_clipboard(struct tty *tty, const char *buf, size_t len, size_t *size)
 {
 	struct client				*c = tty->client;
 	size_t					 end, terminator = 0, needed;
-	char					*copy, *out;
+	char					*copy, *out, clip = 0;
 	int					 outlen;
 	struct input_request_clipboard_data	 cd;
 
@@ -1360,7 +1360,14 @@ tty_keys_clipboard(struct tty *tty, const char *buf, size_t len, size_t *size)
 	/* Adjust end so that it points to the start of the terminator. */
 	end -= terminator - 1;
 
-	/* Get the second argument. */
+	/*
+	 * Save which clipboard was used from the second argument. If more than
+	 * one is specified (should not happen), ignore the argument.
+	 */
+	if (end >= 2 && buf[0] != ';' && buf[1] == ';')
+		clip = buf[0];
+
+	/* Skip the second argument. */
 	while (end != 0 && *buf != ';') {
 		buf++;
 		end--;
@@ -1376,13 +1383,13 @@ tty_keys_clipboard(struct tty *tty, const char *buf, size_t len, size_t *size)
 	copy[end] = '\0';
 
 	/* Convert from base64. */
-	needed = (end / 4) * 3;
+	needed = ((end + 3) / 4) * 3;
 	if (needed == 0) {
 		free(copy);
 		return (0);
 	}
 	out = xmalloc(needed);
-	if ((outlen = b64_pton(copy, out, len)) == -1) {
+	if ((outlen = b64_pton(copy, out, needed)) == -1) {
 		free(out);
 		free(copy);
 		return (0);
@@ -1393,6 +1400,7 @@ tty_keys_clipboard(struct tty *tty, const char *buf, size_t len, size_t *size)
 	/* Set reply if any. */
 	cd.buf = out;
 	cd.len = outlen;
+	cd.clip = clip;
 	input_request_reply(c, INPUT_REQUEST_CLIPBOARD, &cd);
 
 	/* Create a buffer if requested. */
@@ -1632,6 +1640,8 @@ tty_keys_extended_device_attributes(struct tty *tty, const char *buf,
 		tty_default_features(features, "mintty", 0);
 	else if (strncmp(tmp, "foot(", 5) == 0)
 		tty_default_features(features, "foot", 0);
+	else if (strncmp(tmp, "WezTerm ", 7) == 0)
+		tty_default_features(features, "WezTerm", 0);
 	log_debug("%s: received extended DA %.*s", c->name, (int)*size, buf);
 
 	free(c->term_type);
