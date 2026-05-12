@@ -1115,8 +1115,8 @@ struct screen_redraw_ctx {
 
 	u_int		 sx;
 	u_int		 sy;
-	u_int		 ox;
-	u_int		 oy;
+	int		 ox;
+	int		 oy;
 };
 
 /* Screen size. */
@@ -1231,6 +1231,19 @@ enum client_theme {
 	THEME_DARK
 };
 
+/* Visible range array element. */
+struct visible_range {
+	u_int	px;	/* start */
+	u_int	nx;	/* length */
+};
+
+/* Visible areas not obstructed. */
+struct visible_ranges {
+	struct visible_range	*ranges;  /* dynamically allocated array */
+	u_int			 used;    /* number of entries in ranges */
+	u_int			 size;    /* allocated capacity of ranges */
+};
+
 /* Child window structure. */
 struct window_pane {
 	u_int		 id;
@@ -1245,8 +1258,8 @@ struct window_pane {
 	u_int		 sx;
 	u_int		 sy;
 
-	u_int		 xoff;
-	u_int		 yoff;
+	int		 xoff;
+	int		 yoff;
 
 	int		 flags;
 #define PANE_REDRAW 0x1
@@ -1587,19 +1600,6 @@ struct key_event {
 
 	char			*buf;
 	size_t			 len;
-};
-
-/* Visible range array element. */
-struct visible_range {
-	u_int	px;	/* start */
-	u_int	nx;	/* length */
-};
-
-/* Visible areas not obstructed. */
-struct visible_ranges {
-	struct visible_range	*ranges;  /* dynamically allocated array */
-	u_int			 used;    /* number of entries in ranges */
-	u_int			 size;    /* allocated capacity of ranges */
 };
 
 /* Terminal definition. */

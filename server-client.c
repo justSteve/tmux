@@ -632,7 +632,7 @@ server_client_check_mouse_in_pane(struct window_pane *wp, u_int px, u_int py,
 	if (((pane_status != PANE_STATUS_OFF &&
 	    (int)py != pane_status_line && py != wp->yoff + wp->sy) ||
 	    (wp->yoff == 0 && py < wp->sy) ||
-	    (py >= wp->yoff && py < wp->yoff + wp->sy)) &&
+	    ((int)py >= wp->yoff && py < wp->yoff + wp->sy)) &&
 	    ((sb_pos == PANE_SCROLLBARS_RIGHT &&
 	    (int)px < (int)wp->xoff + (int)wp->sx + sb_pad + sb_w) ||
 	    (sb_pos == PANE_SCROLLBARS_LEFT &&
@@ -1057,6 +1057,8 @@ server_client_is_assume_paste(struct client *c)
 	if (c->flags & CLIENT_BRACKETPASTING)
 		return (0);
 	if ((t = options_get_number(s->options, "assume-paste-time")) == 0)
+		return (0);
+	if (tty_term_has(c->tty.term, TTYC_ENBP))
 		return (0);
 
 	timersub(&c->activity_time, &c->last_activity_time, &tv);
