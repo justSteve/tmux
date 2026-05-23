@@ -1055,6 +1055,8 @@ struct screen_write_ctx {
 
 	int				 flags;
 #define SCREEN_WRITE_SYNC 0x1
+#define SCREEN_WRITE_OBSCURED 0x2
+#define SCREEN_WRITE_CHECKED_IF_OBSCURED 0x4
 
 	screen_write_init_ctx_cb	 init_ctx_cb;
 	void				*arg;
@@ -1732,18 +1734,34 @@ struct tty_ctx {
 	void			*arg;
 
 	const struct grid_cell	*cell;
-	int			 wrapped;
+	int                      flags;
+#define TTY_CTX_WRAPPED 0x1
+#define TTY_CTX_INVISIBLE_PANES 0x2
+#define TTY_CTX_WINDOW_BIGGER 0x4
+#define TTY_CTX_SYNC 0x8
+#define TTY_CTX_OVERLAY_SYNC 0x10
+#define TTY_CTX_CELL_DRAW_LINE 0x20
+#define TTY_CTX_CELL_INVALIDATE 0x40
+#define TTY_CTX_PANE_OBSCURED 0x80
 
-	u_int			 num;
-	void			*ptr;
-	void			*ptr2;
+	union {
+		u_int			 n;
 
-	/*
-	 * Whether this command should be sent even when the pane is not
-	 * visible (used for a passthrough sequence when allow-passthrough is
-	 * "all").
-	 */
-	int			 allow_invisible_panes;
+		struct {
+			const char	*data;
+			size_t		 size;
+		} data;
+
+		struct {
+			const char	*clip;
+			const char	*data;
+			size_t		 size;
+		} sel;
+
+#ifdef ENABLE_SIXEL
+		struct image		*image;
+#endif
+	};
 
 	/*
 	 * Cursor and region position before the screen was updated - this is
@@ -1772,7 +1790,6 @@ struct tty_ctx {
 	struct colour_palette	*palette;
 
 	/* Containing region (usually window) offset and size. */
-	int			 bigger;
 	u_int			 wox;
 	u_int			 woy;
 	u_int			 wsx;
@@ -2722,11 +2739,9 @@ void	tty_cmd_scrolldown(struct tty *, const struct tty_ctx *);
 void	tty_cmd_reverseindex(struct tty *, const struct tty_ctx *);
 void	tty_cmd_setselection(struct tty *, const struct tty_ctx *);
 void	tty_cmd_rawstring(struct tty *, const struct tty_ctx *);
-
 #ifdef ENABLE_SIXEL
 void	tty_cmd_sixelimage(struct tty *, const struct tty_ctx *);
 #endif
-
 void	tty_cmd_syncstart(struct tty *, const struct tty_ctx *);
 void	tty_default_colours(struct grid_cell *, struct window_pane *);
 
