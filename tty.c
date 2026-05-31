@@ -1414,9 +1414,8 @@ tty_draw_pane(struct tty *tty, const struct tty_ctx *ctx, u_int py)
 			rr = &r->ranges[j];
 			if (rr->nx == 0)
 				continue;
-			tty_draw_line(tty, s, rr->px, py, rr->nx,
-			    ctx->xoff + rr->px, ctx->yoff + py, &ctx->defaults,
-			    ctx->palette);
+			tty_draw_line(tty, s, rr->px - ctx->xoff, py, rr->nx,
+			    rr->px, ctx->yoff + py, &ctx->defaults, ctx->palette);
 		}
 		return;
 	}
@@ -1426,8 +1425,8 @@ tty_draw_pane(struct tty *tty, const struct tty_ctx *ctx, u_int py)
 			rr = &r->ranges[j];
 			if (rr->nx == 0)
 				continue;
-			tty_draw_line(tty, s, i + rr->px, py, rr->nx,
-			    x + rr->px, ry, &ctx->defaults, ctx->palette);
+			tty_draw_line(tty, s, i + rr->px - x, py, rr->nx,
+			    rr->px, ry, &ctx->defaults, ctx->palette);
 		}
 	}
 }
@@ -2030,10 +2029,11 @@ tty_cmd_cell(struct tty *tty, const struct tty_ctx *ctx)
 
 	px = ctx->xoff + ctx->ocx - ctx->wox;
 	py = ctx->yoff + ctx->ocy - ctx->woy;
-	if (!tty_is_visible(tty, ctx, ctx->ocx, ctx->ocy, 1, 1) ||
-	    (gcp->data.width == 1 && !tty_check_overlay(tty, px, py)))
+	if (!tty_is_visible(tty, ctx, ctx->ocx, ctx->ocy, 1, 1))
 		return;
 
+	if (gcp->data.width == 1 && !tty_check_overlay(tty, px, py))
+		return;
 	if (gcp->data.width > 1) { /* could be partially obscured */
 		r = tty_check_overlay_range(tty, px, py, gcp->data.width);
 		for (i = 0; i < r->used; i++)
