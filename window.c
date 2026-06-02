@@ -644,16 +644,11 @@ window_get_active_at(struct window *w, u_int x, u_int y)
 					continue;
 			}
 		} else {
-			/* Floating - include top or or left border. */
+			/* Floating - include all borders. */
 			if ((int)x < xoff - 1 || x > xoff + sx)
 				continue;
-			if (pane_status == PANE_STATUS_TOP) {
-				if ((int)y <= yoff - 2 || y > yoff + sy - 1)
-					continue;
-			} else {
-				if ((int)y < yoff - 1 || y > yoff + sy)
-					continue;
-			}
+			if ((int)y < yoff - 1 || y > yoff + sy)
+				continue;
 		}
 		return (wp);
 	}
@@ -887,8 +882,8 @@ window_pane_previous_by_number(struct window *w, struct window_pane *wp,
 int
 window_pane_index(struct window_pane *wp, u_int *i)
 {
-	struct window_pane	*wq;
 	struct window		*w = wp->window;
+	struct window_pane	*wq;
 
 	*i = options_get_number(w->options, "pane-base-index");
 	TAILQ_FOREACH(wq, &w->panes, entry) {
@@ -896,6 +891,26 @@ window_pane_index(struct window_pane *wp, u_int *i)
 			return (0);
 		}
 		(*i)++;
+	}
+
+	return (-1);
+}
+
+int
+window_pane_zindex(struct window_pane *wp, u_int *i)
+{
+	struct window		*w = wp->window;
+	struct window_pane	*wq;
+
+	*i = 0;
+	TAILQ_FOREACH(wq, &w->z_index, zentry) {
+		if (wq == wp) {
+			if (~wp->flags & PANE_FLOATING)
+				(*i)++;
+			return (0);
+		}
+		if (wq->flags & PANE_FLOATING)
+			(*i)++;
 	}
 
 	return (-1);
