@@ -695,12 +695,8 @@ server_client_check_mouse_in_pane(struct window_pane *wp, int px, int py,
 				bdr_bottom = fwp->yoff + fwp->sy;
 				if (py == bdr_bottom)
 					break;
-				if (window_pane_is_floating(wp)) {
-					/* Floating pane, check top border. */
-					bdr_top = fwp->yoff - 1;
-					if (py == bdr_top)
-						break;
-				}
+				if (py == bdr_top)
+					break;
 			}
 		}
 		if (fwp != NULL)
@@ -1586,10 +1582,7 @@ server_client_resize_timer(__unused int fd, __unused short events, void *data)
 static void
 server_client_check_pane_resize(struct window_pane *wp)
 {
-	struct window_pane_resize	*r;
-	struct window_pane_resize	*r1;
-	struct window_pane_resize	*first;
-	struct window_pane_resize	*last;
+	struct window_pane_resize	*r, *r1, *first, *last;
 	struct timeval			 tv = { .tv_usec = 250000 };
 
 	if (TAILQ_EMPTY(&wp->resize_queue))

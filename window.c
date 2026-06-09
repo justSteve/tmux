@@ -628,12 +628,32 @@ window_get_active_at(struct window *w, u_int x, u_int y)
 
 	pane_status = options_get_number(w->options, "pane-border-status");
 
+	if (pane_status == PANE_STATUS_TOP) {
+		/*
+		 * Prefer a pane's top border status line over the pane above's
+		 * bottom border.
+		 */
+		TAILQ_FOREACH(wp, &w->z_index, zentry) {
+			if (!window_pane_visible(wp) || window_pane_is_floating(wp))
+				continue;
+
+			window_pane_full_size_offset(wp, &xoff, &yoff, &sx, &sy);
+			if ((int)x < xoff || x > xoff + sx)
+				continue;
+			if ((int)y == yoff - 1)
+				return (wp);
+		}
+	}
+
 	TAILQ_FOREACH(wp, &w->z_index, zentry) {
 		if (!window_pane_visible(wp))
 			continue;
 		window_pane_full_size_offset(wp, &xoff, &yoff, &sx, &sy);
 		if (!window_pane_is_floating(wp)) {
-			/* Tiled - to and including bottom or right border. */
+			/*
+			 * Tiled - to and including the right border, excluding
+			 * the bottom border.
+			 */
 			if ((int)x < xoff || x > xoff + sx)
 				continue;
 			if (pane_status == PANE_STATUS_TOP) {
@@ -1224,6 +1244,7 @@ window_pane_set_mode(struct window_pane *wp, struct window_pane *swp,
 		TAILQ_INSERT_HEAD(&wp->modes, wme, entry);
 		wme->screen = wme->mode->init(wme, fs, args);
 	}
+	wme->kill = args_has(args, 'k');
 	wp->screen = wme->screen;
 
 	wp->flags |= (PANE_REDRAW|PANE_REDRAWSCROLLBAR|PANE_CHANGED);
@@ -1241,11 +1262,13 @@ window_pane_reset_mode(struct window_pane *wp)
 {
 	struct window_mode_entry	*wme, *next;
 	struct window			*w = wp->window;
+	int				 kill;
 
 	if (TAILQ_EMPTY(&wp->modes))
 		return;
 
 	wme = TAILQ_FIRST(&wp->modes);
+	kill = wme->kill;
 	TAILQ_REMOVE(&wp->modes, wme, entry);
 	wme->mode->free(wme);
 	free(wme);
@@ -1268,6 +1291,9 @@ window_pane_reset_mode(struct window_pane *wp)
 	server_redraw_window_borders(wp->window);
 	server_status_window(wp->window);
 	notify_pane("pane-mode-changed", wp);
+
+	if (kill)
+		server_kill_pane(wp);
 }
 
 void
