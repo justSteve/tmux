@@ -1205,6 +1205,7 @@ Kill the
 server and clients and destroy all sessions.
 .It Xo Ic kill\-session
 .Op Fl aCg
+.Op Fl f Ar filter
 .Op Fl t Ar target\-session
 .Xc
 Destroy the given session, closing any windows linked to it and no other
@@ -1212,6 +1213,12 @@ sessions, and detaching all clients attached to it.
 If
 .Fl a
 is given, all sessions but the specified one is killed.
+When
+.Fl a
+is given,
+.Fl f
+specifies a filter.
+Only sessions for which the filter is true are killed.
 If
 .Fl g
 is given and the session is in a session group, all sessions in the group are
@@ -2288,11 +2295,22 @@ Toggle rectangle selection mode.
 .Xc
 Cycles the current line between centre, top, and bottom.
 .It Xo
-.Ic refresh\-from\-pane
+.Ic refresh\-on
+.Xc
+Turn on automatic refresh of the content from the pane, so that new output
+appears while in copy mode.
+Automatic refresh is off by default; it will scroll only while the cursor is at
+the bottom and is paused while a selection is in progress.
+.It Xo
+.Ic refresh\-off
+.Xc
+Turn off automatic refresh of the content from the pane.
+.It Xo
+.Ic refresh\-toggle
 (vi: r)
 (emacs: r)
 .Xc
-Refresh the content from the pane.
+Toggle automatic refresh of the content from the pane.
 .It Xo
 .Ic scroll\-bottom
 .Xc
@@ -3117,6 +3135,7 @@ the marked pane is used rather than the current pane.
 .Tg killp
 .It Xo Ic kill\-pane
 .Op Fl a
+.Op Fl f Ar filter
 .Op Fl t Ar target\-pane
 .Xc
 .D1 Pq alias: Ic killp
@@ -3124,11 +3143,18 @@ Destroy the given pane.
 If no panes remain in the containing window, it is also destroyed.
 The
 .Fl a
-option kills all but the pane given with
+option kills all panes in the window except the pane given with
 .Fl t .
+When
+.Fl a
+is given,
+.Fl f
+specifies a filter.
+Only panes for which the filter is true are killed.
 .Tg killw
 .It Xo Ic kill\-window
 .Op Fl a
+.Op Fl f Ar filter
 .Op Fl t Ar target\-window
 .Xc
 .D1 Pq alias: Ic killw
@@ -3137,8 +3163,14 @@ Kill the current window or the window at
 removing it from any sessions to which it is linked.
 The
 .Fl a
-option kills all but the window given with
+option kills all windows in the session except the window given with
 .Fl t .
+When
+.Fl a
+is given,
+.Fl f
+specifies a filter.
+Only windows for which the filter is true are killed.
 .Tg lastp
 .It Xo Ic last\-pane
 .Op Fl deZ
@@ -3382,7 +3414,7 @@ but a different format may be specified with
 .Fl F .
 .Tg newp
 .It Xo Ic new\-pane
-.Op Fl bdefhIkPvZ
+.Op Fl bdefhIkPvWZ
 .Op Fl c Ar start\-directory
 .Op Fl e Ar environment
 .Op Fl F Ar format
@@ -3457,6 +3489,17 @@ but also sets the
 .Ic remain\-on\-exit\-format
 option for this pane to
 .Ar message .
+.Pp
+.Fl W
+Waits until
+.Ar shell\-command
+exits, then returns its exit status.
+For example:
+.Bd -literal -offset indent
+$ tmux new-pane -W 'vi afile'
+$ echo $?
+0
+.Ed
 .Pp
 .Fl E ,
 or an empty

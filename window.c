@@ -18,6 +18,7 @@
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -379,6 +380,13 @@ window_pane_destroy_ready(struct window_pane *wp)
 		return (0);
 
 	if (~wp->flags & PANE_EXITED)
+		return (0);
+
+	/*
+	 * If a command queue item is blocked on this pane, wait for the
+	 * child's exit status before destroying it.
+	 */
+	if (wp->wait_item != NULL && (~wp->flags & PANE_STATUSREADY))
 		return (0);
 	return (1);
 }
@@ -1084,11 +1092,37 @@ window_pane_create(struct window *w, u_int sx, u_int sy, u_int hlimit)
 	return (wp);
 }
 
+void
+window_pane_wait_finish(struct window_pane *wp)
+{
+	struct cmdq_item	*item = wp->wait_item;
+	struct client		*c;
+	int			 retval = 0;
+
+	if (item == NULL)
+		return;
+	wp->wait_item = NULL;
+
+	if (wp->flags & PANE_STATUSREADY) {
+		if (WIFEXITED(wp->status))
+			retval = WEXITSTATUS(wp->status);
+		else if (WIFSIGNALED(wp->status))
+			retval = WTERMSIG(wp->status) + 128;
+	}
+
+	c = cmdq_get_client(item);
+	if (c != NULL && c->session == NULL)
+		c->retval = retval;
+	cmdq_continue(item);
+}
+
 static void
 window_pane_destroy(struct window_pane *wp)
 {
 	struct window_pane_resize	*r;
 	struct window_pane_resize	*r1;
+
+	window_pane_wait_finish(wp);
 
 	window_pane_reset_mode_all(wp);
 	free(wp->searchstr);
@@ -1244,7 +1278,7 @@ window_pane_set_mode(struct window_pane *wp, struct window_pane *swp,
 		TAILQ_INSERT_HEAD(&wp->modes, wme, entry);
 		wme->screen = wme->mode->init(wme, fs, args);
 	}
-	wme->kill = args_has(args, 'k');
+	wme->kill = args != NULL ? args_has(args, 'k') : 0;
 	wp->screen = wme->screen;
 
 	wp->flags |= (PANE_REDRAW|PANE_REDRAWSCROLLBAR|PANE_CHANGED);
