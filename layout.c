@@ -292,15 +292,22 @@ layout_fix_offsets(struct window *w)
 static int
 layout_cell_is_top(struct window *w, struct layout_cell *lc)
 {
-	struct layout_cell	*next;
+	struct layout_cell	*next, *edge;
 
 	while (lc != w->layout_root) {
 		next = lc->parent;
 		if (next == NULL)
 			return (0);
-		if (next->type == LAYOUT_TOPBOTTOM &&
-		    lc != TAILQ_FIRST(&next->cells))
-			return (0);
+		if (next->type == LAYOUT_TOPBOTTOM) {
+			edge = TAILQ_FIRST(&next->cells);
+			while (edge != NULL) {
+				if (~edge->flags & LAYOUT_CELL_FLOATING)
+					break;
+				edge = TAILQ_NEXT(edge, entry);
+			}
+			if (lc != edge)
+				return (0);
+		}
 		lc = next;
 	}
 	return (1);
@@ -310,15 +317,22 @@ layout_cell_is_top(struct window *w, struct layout_cell *lc)
 static int
 layout_cell_is_bottom(struct window *w, struct layout_cell *lc)
 {
-	struct layout_cell	*next;
+	struct layout_cell	*next, *edge;
 
 	while (lc != w->layout_root) {
 		next = lc->parent;
 		if (next == NULL)
 			return (0);
-		if (next->type == LAYOUT_TOPBOTTOM &&
-		    lc != TAILQ_LAST(&next->cells, layout_cells))
-			return (0);
+		if (next->type == LAYOUT_TOPBOTTOM) {
+			edge = TAILQ_LAST(&next->cells, layout_cells);
+			while (edge != NULL) {
+				if (~edge->flags & LAYOUT_CELL_FLOATING)
+					break;
+				edge = TAILQ_PREV(edge, layout_cells, entry);
+			}
+			if (lc != edge)
+				return (0);
+		}
 		lc = next;
 	}
 	return (1);
@@ -348,7 +362,7 @@ layout_fix_panes(struct window *w, struct window_pane *skip)
 	int			 status, scrollbars, sb_pos, sb_w, sb_pad;
 	u_int			 sx, sy;
 
-	status = options_get_number(w->options, "pane-border-status");
+	status = window_get_pane_status(w);
 	scrollbars = options_get_number(w->options, "pane-scrollbars");
 	sb_pos = options_get_number(w->options, "pane-scrollbars-position");
 
@@ -426,7 +440,7 @@ layout_resize_check(struct window *w, struct layout_cell *lc,
 	u_int			 available, minimum;
 	int			 status, scrollbars;
 
-	status = options_get_number(w->options, "pane-border-status");
+	status = window_get_pane_status(w);
 	scrollbars = options_get_number(w->options, "pane-scrollbars");
 
 	if (lc->type == LAYOUT_WINDOWPANE) {
@@ -698,6 +712,8 @@ layout_resize_floating_pane_to(struct window_pane *wp, enum layout_type type,
 		return;
 	}
 
+	if (size >= PANE_MINIMUM + 2)
+		size -= 2;
 	if (size < PANE_MINIMUM || size > PANE_MAXIMUM) {
 		*cause = xstrdup("size is too big or too small");
 		return;
@@ -1058,7 +1074,7 @@ layout_split_pane(struct window_pane *wp, enum layout_type type, int size,
 		lc = wp->window->layout_root;
 	else
 		lc = wp->layout_cell;
-	status = options_get_number(wp->window->options, "pane-border-status");
+	status = window_get_pane_status(wp->window);
 	scrollbars = options_get_number(wp->window->options, "pane-scrollbars");
 
 	/* Copy the old cell size. */
@@ -1281,7 +1297,7 @@ layout_spread_cell(struct window *w, struct layout_cell *parent)
 		number++;
 	if (number <= 1)
 		return (0);
-	status = options_get_number(w->options, "pane-border-status");
+	status = window_get_pane_status(w);
 
 	if (parent->type == LAYOUT_LEFTRIGHT)
 		size = parent->sx;
