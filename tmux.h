@@ -96,6 +96,12 @@ struct winlink;
 #define TMUX_LOCK_CMD "lock -np"
 #endif
 
+/* Forbidden characters in names. */
+#define WINDOW_NAME_FORBID ":."
+#define WINDOW_NAME_FORBID_EXT ":.#"
+#define SESSION_NAME_FORBID ":."
+#define SESSION_NAME_FORBID_EXT ":.#"
+
 /* Minimum and maximum layout cell size, NOT including border lines. */
 #define PANE_MINIMUM 1
 #define PANE_MAXIMUM 10000
@@ -1091,7 +1097,8 @@ enum pane_lines {
 	PANE_LINES_HEAVY,
 	PANE_LINES_SIMPLE,
 	PANE_LINES_NUMBER,
-	PANE_LINES_SPACES
+	PANE_LINES_SPACES,
+	PANE_LINES_NONE
 };
 
 /* Pane border indicator option. */
@@ -1112,7 +1119,6 @@ struct screen_redraw_ctx {
 	u_int		 statuslines;
 	int		 statustop;
 
-	int		 pane_status;
 	enum pane_lines	 pane_lines;
 
 	int		 pane_scrollbars;
@@ -1450,6 +1456,8 @@ TAILQ_HEAD(winlink_stack, winlink);
 #define PANE_STATUS_OFF 0
 #define PANE_STATUS_TOP 1
 #define PANE_STATUS_BOTTOM 2
+#define PANE_STATUS_TOP_FLOATING 3
+#define PANE_STATUS_BOTTOM_FLOATING 4
 
 /* Pane scrollbars option. */
 #define PANE_SCROLLBARS_OFF 0
@@ -2421,6 +2429,7 @@ void		 setblocking(int, int);
 char 		*shell_argv0(const char *, int);
 uint64_t	 get_timer(void);
 char		*clean_name(const char *, const char *);
+int		 check_name(const char *, const char *);
 const char	*sig2name(int);
 const char	*find_cwd(void);
 const char	*find_home(void);
@@ -2738,6 +2747,7 @@ void	tty_write(void (*)(struct tty *, const struct tty_ctx *),
 void	tty_cmd_alignmenttest(struct tty *, const struct tty_ctx *);
 void	tty_cmd_cell(struct tty *, const struct tty_ctx *);
 void	tty_cmd_cells(struct tty *, const struct tty_ctx *);
+void	tty_cmd_redrawline(struct tty *, const struct tty_ctx *);
 void	tty_cmd_clearendofline(struct tty *, const struct tty_ctx *);
 void	tty_cmd_clearendofscreen(struct tty *, const struct tty_ctx *);
 void	tty_cmd_clearline(struct tty *, const struct tty_ctx *);
@@ -3391,8 +3401,8 @@ void	 screen_reset_hyperlinks(struct screen *);
 void	 screen_set_default_cursor(struct screen *, struct options *);
 void	 screen_set_cursor_style(u_int, enum screen_cursor_style *, int *);
 void	 screen_set_cursor_colour(struct screen *, int);
-int	 screen_set_title(struct screen *, const char *);
-int	 screen_set_path(struct screen *, const char *);
+int	 screen_set_title(struct screen *, const char *, int);
+int	 screen_set_path(struct screen *, const char *, int);
 void	 screen_push_title(struct screen *);
 void	 screen_pop_title(struct screen *);
 void	 screen_set_progress_bar(struct screen *, enum progress_bar_state, int);
@@ -3485,7 +3495,7 @@ int		 window_pane_key(struct window_pane *, struct client *,
 		     struct mouse_event *);
 void		 window_pane_paste(struct window_pane *, key_code, char *,
 		     size_t);
-int		 window_pane_visible(struct window_pane *);
+int		 window_pane_is_visible(struct window_pane *);
 int		 window_pane_exited(struct window_pane *);
 u_int		 window_pane_search(struct window_pane *, const char *, int,
 		     int);
@@ -3499,7 +3509,7 @@ void		 window_pane_stack_push(struct window_panes *,
 		     struct window_pane *);
 void		 window_pane_stack_remove(struct window_panes *,
 		     struct window_pane *);
-void		 window_set_name(struct window *, const char *);
+void		 window_set_name(struct window *, const char *, const char *);
 void		 window_add_ref(struct window *, const char *);
 void		 window_remove_ref(struct window *, const char *);
 void		 winlink_clear_flags(struct winlink *);
@@ -3521,7 +3531,9 @@ int		 window_pane_get_bg_control_client(struct window_pane *);
 int		 window_get_bg_client(struct window_pane *);
 enum client_theme window_pane_get_theme(struct window_pane *);
 void		 window_pane_send_theme_update(struct window_pane *);
+enum pane_lines	 window_pane_get_pane_lines(struct window_pane *);
 int		 window_get_pane_status(struct window *);
+int		 window_pane_get_pane_status(struct window_pane *);
 struct style_range *window_pane_status_get_range(struct window_pane *, u_int,
 		     u_int);
 int		 window_pane_is_floating(struct window_pane *);

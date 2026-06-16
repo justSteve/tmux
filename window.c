@@ -409,11 +409,11 @@ window_remove_ref(struct window *w, const char *from)
 }
 
 void
-window_set_name(struct window *w, const char *new_name)
+window_set_name(struct window *w, const char *new_name, const char *forbid)
 {
 	char	*name;
 
-	name = clean_name(new_name, "#");
+	name = clean_name(new_name, forbid);
 	if (name != NULL) {
 		free(w->name);
 		w->name = name;
@@ -642,7 +642,7 @@ window_get_active_at(struct window *w, u_int x, u_int y)
 		 * bottom border.
 		 */
 		TAILQ_FOREACH(wp, &w->z_index, zentry) {
-			if (!window_pane_visible(wp) ||
+			if (!window_pane_is_visible(wp) ||
 			    window_pane_is_floating(wp))
 				continue;
 
@@ -656,7 +656,7 @@ window_get_active_at(struct window *w, u_int x, u_int y)
 	}
 
 	TAILQ_FOREACH(wp, &w->z_index, zentry) {
-		if (!window_pane_visible(wp))
+		if (!window_pane_is_visible(wp))
 			continue;
 		window_pane_full_size_offset(wp, &xoff, &yoff, &sx, &sy);
 		if (!window_pane_is_floating(wp)) {
@@ -674,11 +674,18 @@ window_get_active_at(struct window *w, u_int x, u_int y)
 					continue;
 			}
 		} else {
-			/* Floating - include all borders. */
-			if ((int)x < xoff - 1 || x > xoff + sx)
-				continue;
-			if ((int)y < yoff - 1 || y > yoff + sy)
-				continue;
+			if (window_pane_get_pane_lines(wp) == PANE_LINES_NONE) {
+				if ((int)x < xoff || (int)x >= xoff + (int)sx)
+					continue;
+				if ((int)y < yoff || (int)y >= yoff + (int)sy)
+					continue;
+			} else {
+				/* Floating - include all borders. */
+				if ((int)x < xoff - 1 || x > xoff + sx)
+					continue;
+				if ((int)y < yoff - 1 || y > yoff + sy)
+					continue;
+			}
 		}
 		return (wp);
 	}
@@ -1089,7 +1096,7 @@ window_pane_create(struct window *w, u_int sx, u_int sy, u_int hlimit)
 	style_ranges_init(&wp->border_status_line.ranges);
 
 	if (gethostname(host, sizeof host) == 0)
-		screen_set_title(&wp->base, host);
+		screen_set_title(&wp->base, host, 0);
 
 	return (wp);
 }
@@ -1356,7 +1363,7 @@ window_pane_copy_paste(struct window_pane *wp, char *buf, size_t len)
 		    TAILQ_EMPTY(&loop->modes) &&
 		    loop->fd != -1 &&
 		    (~loop->flags & PANE_INPUTOFF) &&
-		    window_pane_visible(loop) &&
+		    window_pane_is_visible(loop) &&
 		    options_get_number(loop->options, "synchronize-panes")) {
 			log_debug("%s: %.*s", __func__, (int)len, buf);
 			bufferevent_write(loop->event, buf, len);
@@ -1374,7 +1381,7 @@ window_pane_copy_key(struct window_pane *wp, key_code key)
 		    TAILQ_EMPTY(&loop->modes) &&
 		    loop->fd != -1 &&
 		    (~loop->flags & PANE_INPUTOFF) &&
-		    window_pane_visible(loop) &&
+		    window_pane_is_visible(loop) &&
 		    options_get_number(loop->options, "synchronize-panes"))
 			input_key_pane(loop, key, NULL);
 	}
@@ -1431,7 +1438,7 @@ window_pane_key(struct window_pane *wp, struct client *c, struct session *s,
 }
 
 int
-window_pane_visible(struct window_pane *wp)
+window_pane_is_visible(struct window_pane *wp)
 {
 	if (~wp->window->flags & WINDOW_ZOOMED)
 		return (1);
@@ -2137,16 +2144,14 @@ struct style_range *
 window_pane_status_get_range(struct window_pane *wp, u_int x, u_int y)
 {
 	struct style_ranges	*srs;
-	struct window		*w;
 	u_int			 line;
 	int			 pane_status;
 
 	if (wp == NULL)
 		return (NULL);
-	w = wp->window;
 	srs = &wp->border_status_line.ranges;
 
-	pane_status = window_get_pane_status(w);
+	pane_status = window_pane_get_pane_status(wp);
 	if (pane_status == PANE_STATUS_TOP)
 		line = wp->yoff - 1;
 	else if (pane_status == PANE_STATUS_BOTTOM)
@@ -2161,10 +2166,46 @@ window_pane_status_get_range(struct window_pane *wp, u_int x, u_int y)
 	return (style_ranges_get_range(srs, x - wp->xoff - 2));
 }
 
+enum pane_lines
+window_pane_get_pane_lines(struct window_pane *wp)
+{
+	struct options	*oo;
+
+	if (!window_pane_is_floating(wp))
+		oo = wp->window->options;
+	else
+		oo = wp->options;
+	return (options_get_number(oo, "pane-border-lines"));
+}
+
 int
 window_get_pane_status(struct window *w)
 {
-       return (options_get_number(w->options, "pane-border-status"));
+	int	status;
+
+	status = options_get_number(w->options, "pane-border-status");
+	if (status == PANE_STATUS_TOP_FLOATING ||
+	    status == PANE_STATUS_BOTTOM_FLOATING)
+		return (PANE_STATUS_OFF);
+	return (status);
+}
+
+int
+window_pane_get_pane_status(struct window_pane *wp)
+{
+	int	status;
+
+	if (!window_pane_is_floating(wp))
+		return (window_get_pane_status(wp->window));
+	if (window_pane_get_pane_lines(wp) == PANE_LINES_NONE)
+		return (PANE_STATUS_OFF);
+
+	status = options_get_number(wp->options, "pane-border-status");
+	if (status == PANE_STATUS_TOP_FLOATING)
+		return (PANE_STATUS_TOP);
+	if (status == PANE_STATUS_BOTTOM_FLOATING)
+		return (PANE_STATUS_BOTTOM);
+	return (status);
 }
 
 int
