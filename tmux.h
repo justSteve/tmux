@@ -955,6 +955,7 @@ enum style_default_type {
 struct style {
 	struct grid_cell	gc;
 	int			ignore;
+	int			dim;
 
 	int			fill;
 	enum style_align	align;
@@ -1323,6 +1324,8 @@ struct window_pane {
 
 	struct grid_cell cached_gc;
 	struct grid_cell cached_active_gc;
+	u_int		 cached_dim;
+	u_int		 cached_active_dim;
 	struct colour_palette palette;
 	enum client_theme last_theme;
 	struct style_line_entry border_status_line;
@@ -1663,6 +1666,7 @@ LIST_HEAD(tty_terms, tty_term);
 struct tty_style_ctx {
 	const struct grid_cell	*defaults;
 	struct colour_palette	*palette;
+	u_int			 dim;
 	struct hyperlinks	*hyperlinks;
 };
 
@@ -2765,7 +2769,7 @@ void	tty_cmd_sixelimage(struct tty *, const struct tty_ctx *);
 void	tty_draw_images(struct client *, struct window_pane *, struct screen *);
 #endif
 void	tty_cmd_syncstart(struct tty *, const struct tty_ctx *);
-void	tty_default_colours(struct grid_cell *, struct window_pane *);
+void	tty_default_colours(struct grid_cell *, struct window_pane *, u_int *);
 
 /* tty-term.c */
 extern struct tty_terms tty_terms;
@@ -3202,6 +3206,7 @@ int	 colour_find_rgb(u_char, u_char, u_char);
 int	 colour_join_rgb(u_char, u_char, u_char);
 void	 colour_split_rgb(int, u_char *, u_char *, u_char *);
 int	 colour_force_rgb(int);
+int	 colour_dim(int, u_int);
 const char *colour_tostring(int);
 enum client_theme colour_totheme(int);
 int	 colour_fromstring(const char *);
@@ -3553,6 +3558,7 @@ void		 layout_fix_offsets(struct window *);
 void		 layout_fix_panes(struct window *, struct window_pane *);
 void		 layout_resize_adjust(struct window *, struct layout_cell *,
 		     enum layout_type, int);
+struct layout_cell *layout_cell_get_neighbour(struct layout_cell *);
 void		 layout_init(struct window *, struct window_pane *);
 void		 layout_free(struct window *);
 void		 layout_resize(struct window *, u_int, u_int);
@@ -3573,10 +3579,11 @@ struct layout_cell *layout_floating_pane(struct window *, u_int, u_int, int,
 void		 layout_close_pane(struct window_pane *);
 int		 layout_spread_cell(struct window *, struct layout_cell *);
 void		 layout_spread_out(struct window_pane *);
-struct layout_cell *layout_get_floating_cell(struct cmdq_item *, struct args *,
-		     struct window *, struct window_pane *, char **);
 struct layout_cell *layout_get_tiled_cell(struct cmdq_item *, struct args *,
 		     struct window *, struct window_pane *, int, char **);
+struct layout_cell *layout_get_floating_cell(struct cmdq_item *, struct args *,
+		     struct window *, struct window_pane *, char **);
+int		 layout_remove_tile(struct window *, struct layout_cell *);
 
 /* layout-custom.c */
 char		*layout_dump(struct window *, struct layout_cell *);
@@ -3854,7 +3861,7 @@ int		 popup_modify(struct client *, const char *, const char *,
 int		 style_parse(struct style *,const struct grid_cell *,
 		     const char *);
 const char	*style_tostring(struct style *);
-void		 style_add(struct grid_cell *, struct options *,
+struct style	*style_add(struct grid_cell *, struct options *,
 		     const char *, struct format_tree *);
 void		 style_apply(struct grid_cell *, struct options *,
 		     const char *, struct format_tree *);
