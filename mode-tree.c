@@ -383,6 +383,13 @@ mode_tree_get_current_name(struct mode_tree_data *mtd)
 }
 
 void
+mode_tree_select_top(struct mode_tree_data *mtd)
+{
+	mtd->current = 0;
+	mtd->offset = 0;
+}
+
+void
 mode_tree_expand_current(struct mode_tree_data *mtd)
 {
 	if (!mtd->line_list[mtd->current].item->expanded) {
@@ -509,7 +516,9 @@ mode_tree_start(struct window_pane *wp, struct args *args,
 	mtd->modedata = modedata;
 	mtd->menu = menu;
 
-	if (args_has(args, 'N') > 1)
+	if (drawcb == NULL)
+		mtd->preview = MODE_TREE_PREVIEW_OFF;
+	else if (args_has(args, 'N') > 1)
 		mtd->preview = MODE_TREE_PREVIEW_BIG;
 	else if (args_has(args, 'N'))
 		mtd->preview = MODE_TREE_PREVIEW_OFF;
@@ -1059,7 +1068,7 @@ mode_tree_search_set(struct mode_tree_data *mtd)
 
 static int
 mode_tree_search_callback(__unused struct client *c, void *data, const char *s,
-    __unused int done)
+    __unused int flags)
 {
 	struct mode_tree_data	*mtd = data;
 
@@ -1086,7 +1095,7 @@ mode_tree_search_free(void *data)
 
 static int
 mode_tree_filter_callback(__unused struct client *c, void *data, const char *s,
-    __unused int done)
+    __unused int flags)
 {
 	struct mode_tree_data	*mtd = data;
 
@@ -1111,6 +1120,17 @@ static void
 mode_tree_filter_free(void *data)
 {
 	mode_tree_remove_ref(data);
+}
+
+static void
+mode_tree_clear_filter(struct mode_tree_data *mtd)
+{
+	free(mtd->filter);
+	mtd->filter = NULL;
+
+	mode_tree_build(mtd);
+	mode_tree_draw(mtd);
+	mtd->wp->flags |= PANE_REDRAW;
 }
 
 static void
@@ -1480,6 +1500,9 @@ mode_tree_key(struct mode_tree_data *mtd, struct client *c, key_code *key,
 		status_prompt_set(c, NULL, "(filter) ", mtd->filter,
 		    mode_tree_filter_callback, mode_tree_filter_free, mtd,
 		    PROMPT_NOFORMAT, PROMPT_TYPE_SEARCH);
+		break;
+	case 'c':
+		mode_tree_clear_filter(mtd);
 		break;
 	case 'v':
 		switch (mtd->preview) {

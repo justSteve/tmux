@@ -472,6 +472,7 @@ window_customize_build_keys(struct window_customize_modedata *data,
 			expanded = format_expand(ft, filter);
 			if (!format_true(expanded)) {
 				free(expanded);
+				bd = key_bindings_next(kt, bd);
 				continue;
 			}
 			free(expanded);
@@ -740,8 +741,10 @@ window_customize_draw_option(struct window_customize_modedata *data,
 		if (strcmp(expanded, value) != 0) {
 			if (!screen_write_text(ctx, cx, sx, sy - (s->cy - cy),
 			    0, &grid_default_cell, "This expands to: %s",
-			    expanded))
+			    expanded)) {
+				free(expanded);
 				goto out;
+			}
 		}
 		free(expanded);
 	}
@@ -978,7 +981,7 @@ window_customize_free_item_callback(void *itemdata)
 
 static int
 window_customize_set_option_callback(struct client *c, void *itemdata,
-    const char *s, __unused int done)
+    const char *s, __unused int flags)
 {
 	struct window_customize_itemdata	*item = itemdata;
 	struct window_customize_modedata	*data = item->data;
@@ -1192,7 +1195,7 @@ window_customize_reset_option(struct window_customize_modedata *data,
 
 static int
 window_customize_set_command_callback(struct client *c, void *itemdata,
-    const char *s, __unused int done)
+    const char *s, __unused int flags)
 {
 	struct window_customize_itemdata	*item = itemdata;
 	struct window_customize_modedata	*data = item->data;
@@ -1231,7 +1234,7 @@ fail:
 
 static int
 window_customize_set_note_callback(__unused struct client *c, void *itemdata,
-    const char *s, __unused int done)
+    const char *s, __unused int flags)
 {
 	struct window_customize_itemdata	*item = itemdata;
 	struct window_customize_modedata	*data = item->data;
@@ -1369,7 +1372,7 @@ window_customize_change_each(void *modedata, void *itemdata,
 
 static int
 window_customize_change_current_callback(__unused struct client *c,
-    void *modedata, const char *s, __unused int done)
+    void *modedata, const char *s, __unused int flags)
 {
 	struct window_customize_modedata	*data = modedata;
 	struct window_customize_itemdata	*item;
@@ -1405,7 +1408,7 @@ window_customize_change_current_callback(__unused struct client *c,
 
 static int
 window_customize_change_tagged_callback(struct client *c, void *modedata,
-    const char *s, __unused int done)
+    const char *s, __unused int flags)
 {
 	struct window_customize_modedata	*data = modedata;
 

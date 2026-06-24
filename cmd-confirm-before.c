@@ -120,7 +120,7 @@ cmd_confirm_before_exec(struct cmd *self, struct cmdq_item *item)
 
 static int
 cmd_confirm_before_callback(struct client *c, void *data, const char *s,
-    __unused int done)
+    __unused int flags)
 {
 	struct cmd_confirm_before_data	*cdata = data;
 	struct cmdq_item		*item = cdata->item, *new_item;

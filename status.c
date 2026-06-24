@@ -670,9 +670,10 @@ static enum cmd_retval
 status_prompt_accept(__unused struct cmdq_item *item, void *data)
 {
 	struct client	*c = data;
+	void		*pd = c->prompt_data;
 
 	if (c->prompt_string != NULL) {
-		c->prompt_inputcb(c, c->prompt_data, "y", 1);
+		c->prompt_inputcb(c, pd, "y", PROMPT_INPUT_DONE);
 		status_prompt_clear(c);
 	}
 	return (CMD_RETURN_NORMAL);
@@ -685,7 +686,7 @@ status_prompt_set(struct client *c, struct cmd_find_state *fs,
     prompt_free_cb freecb, void *data, int flags, enum prompt_type prompt_type)
 {
 	struct format_tree	*ft;
-	char			*tmp;
+	char			*tmp, *cp;
 
 	server_client_clear_overlay(c);
 
@@ -734,8 +735,13 @@ status_prompt_set(struct client *c, struct cmd_find_state *fs,
 		c->tty.flags |= TTY_FREEZE;
 	c->flags |= CLIENT_REDRAWSTATUS;
 
-	if (flags & PROMPT_INCREMENTAL)
-		c->prompt_inputcb(c, c->prompt_data, "=", 0);
+	if (flags & PROMPT_INCREMENTAL) {
+		tmp = utf8_tocstr(c->prompt_buffer);
+		xasprintf(&cp, "=%s", tmp);
+		c->prompt_inputcb(c, c->prompt_data, cp, 0);
+		free(cp);
+		free(tmp);
+	}
 
 	if ((flags & PROMPT_SINGLE) && (flags & PROMPT_ACCEPT))
 		cmdq_append(c, cmdq_get_callback(status_prompt_accept, c));
@@ -898,7 +904,7 @@ status_prompt_redraw(struct client *c)
 	status_prompt_area(c, &ax, &aw);
 
 	tmp = utf8_tocstr(c->prompt_buffer);
-	format_add(ft, "prompt-input", "%s", tmp);
+	format_add(ft, "prompt_input", "%s", tmp);
 	prompt = format_expand_time(ft, c->prompt_string);
 	free(tmp);
 
@@ -1424,20 +1430,58 @@ status_prompt_backward_word(struct client *c, const char *separators)
 	c->prompt_index = idx;
 }
 
+/* Fire input callback when done. */
+static void
+status_prompt_done(struct client *c, const char *s)
+{
+	struct prompt_data	*pd = c->prompt_data;
+
+	if (c->prompt_inputcb(c, pd, s, PROMPT_INPUT_DONE) == 0)
+		status_prompt_clear(c);
+}
+
+/* Check for a movement key. */
+static int
+status_prompt_check_move(struct client *c, key_code key)
+{
+	struct prompt_data	*pd = c->prompt_data;
+	char			*s;
+
+	if (~c->prompt_flags & PROMPT_INCREMENTAL)
+		return (0);
+	switch (key) {
+	case KEYC_UP:
+	case KEYC_DOWN:
+	case KEYC_LEFT:
+	case KEYC_RIGHT:
+	case KEYC_PPAGE:
+	case KEYC_NPAGE:
+		break;
+	default:
+		return (0);
+	}
+	s = utf8_tocstr(c->prompt_buffer);
+	if (c->prompt_inputcb(c, pd, s, PROMPT_INPUT_MOVE) == 0)
+		status_prompt_clear(c);
+	free(s);
+	return (1);
+}
+
 /* Handle keys in prompt. */
 int
 status_prompt_key(struct client *c, key_code key)
 {
+	struct prompt_data	*pd = c->prompt_data;
 	struct options		*oo = c->session->options;
 	char			*s, *cp, prefix = '=';
-	const char		*histstr, *separators = NULL, *keystring;
+	const char		*histstr, *separators = NULL, *ks;
 	size_t			 size, idx;
 	struct utf8_data	 tmp;
 	int			 keys, word_is_separators;
 
 	if (c->prompt_flags & PROMPT_KEY) {
-		keystring = key_string_lookup_key(key, 0);
-		c->prompt_inputcb(c, c->prompt_data, keystring, 1);
+		ks = key_string_lookup_key(key, 0);
+		c->prompt_inputcb(c, pd, ks, PROMPT_INPUT_DONE);
 		status_prompt_clear(c);
 		return (0);
 	}
@@ -1450,7 +1494,7 @@ status_prompt_key(struct client *c, key_code key)
 		if (key >= '0' && key <= '9')
 			goto append_key;
 		s = utf8_tocstr(c->prompt_buffer);
-		c->prompt_inputcb(c, c->prompt_data, s, 1);
+		c->prompt_inputcb(c, pd, s, PROMPT_INPUT_DONE);
 		status_prompt_clear(c);
 		free(s);
 		return (1);
@@ -1482,6 +1526,8 @@ status_prompt_key(struct client *c, key_code key)
 	}
 
 process_key:
+	if (status_prompt_check_move(c, key))
+		return (1);
 	switch (key) {
 	case KEYC_LEFT:
 	case 'b'|KEYC_CTRL:
@@ -1518,8 +1564,7 @@ process_key:
 	case KEYC_BSPACE:
 	case 'h'|KEYC_CTRL:
 		if (c->prompt_flags & PROMPT_BSPACE_EXIT && size == 0) {
-			if (c->prompt_inputcb(c, c->prompt_data, NULL, 1) == 0)
-				status_prompt_clear(c);
+			status_prompt_done(c, NULL);
 			break;
 		}
 		if (c->prompt_index != 0) {
@@ -1664,16 +1709,14 @@ process_key:
 		s = utf8_tocstr(c->prompt_buffer);
 		if (*s != '\0')
 			status_prompt_add_history(s, c->prompt_type);
-		if (c->prompt_inputcb(c, c->prompt_data, s, 1) == 0)
-			status_prompt_clear(c);
+		status_prompt_done(c, s);
 		free(s);
 		break;
 	case '\033': /* Escape */
 	case '['|KEYC_CTRL:
 	case 'c'|KEYC_CTRL:
 	case 'g'|KEYC_CTRL:
-		if (c->prompt_inputcb(c, c->prompt_data, NULL, 1) == 0)
-			status_prompt_clear(c);
+		status_prompt_done(c, NULL);
 		break;
 	case 'r'|KEYC_CTRL:
 		if (~c->prompt_flags & PROMPT_INCREMENTAL)
@@ -1738,8 +1781,7 @@ append_key:
 			status_prompt_clear(c);
 		else {
 			s = utf8_tocstr(c->prompt_buffer);
-			if (c->prompt_inputcb(c, c->prompt_data, s, 1) == 0)
-				status_prompt_clear(c);
+			status_prompt_done(c, s);
 			free(s);
 		}
 	}
@@ -1749,7 +1791,7 @@ changed:
 	if (c->prompt_flags & PROMPT_INCREMENTAL) {
 		s = utf8_tocstr(c->prompt_buffer);
 		xasprintf(&cp, "%c%s", prefix, s);
-		c->prompt_inputcb(c, c->prompt_data, cp, 0);
+		c->prompt_inputcb(c, pd, cp, 0);
 		free(cp);
 		free(s);
 	}
