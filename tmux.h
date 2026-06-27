@@ -1512,6 +1512,12 @@ struct layout_cell {
 	int		 xoff;
 	int		 yoff;
 
+	u_int		 saved_sx;
+	u_int		 saved_sy;
+
+	int		 saved_xoff;
+	int		 saved_yoff;
+
 	struct window_pane *wp;
 	struct layout_cells cells;
 
@@ -2089,6 +2095,7 @@ typedef void (*prompt_free_cb)(void *);
 #define PROMPT_COMMANDMODE 0x200
 #define PROMPT_ISPANE 0x400
 #define PROMPT_ISMODE 0x800
+#define PROMPT_EDITARROWS 0x1000
 
 /* Prompt create data. */
 struct prompt_create_data {
@@ -2103,6 +2110,7 @@ struct prompt_create_data {
 	enum screen_cursor_style cstyle;
 	enum screen_cursor_style command_cstyle;
 	int			 ccolour;
+	int			 command_ccolour;
 	int			 cmode;
 	int			 command_cmode;
 	const char		*message_format;
@@ -3307,6 +3315,9 @@ void	 colour_palette_from_option(struct colour_palette *, struct options *);
 const char *attributes_tostring(int);
 int	 attributes_fromstring(const char *);
 
+/* fuzzy.c */
+bitstr_t	*fuzzy_match(const char *, const char *, u_int, u_int *);
+
 /* grid.c */
 extern const struct grid_cell grid_default_cell;
 void	 grid_empty_line(struct grid *, u_int, u_int);
@@ -3412,7 +3423,8 @@ void	 screen_write_fast_copy(struct screen_write_ctx *, struct screen *,
 	     u_int, u_int, u_int, u_int);
 void	 screen_write_hline(struct screen_write_ctx *, u_int, int, int,
 	     enum box_lines, const struct grid_cell *);
-void	 screen_write_vline(struct screen_write_ctx *, u_int, int, int);
+void	 screen_write_vline(struct screen_write_ctx *, u_int, int, int,
+	     const struct grid_cell *);
 void	 screen_write_menu(struct screen_write_ctx *, struct menu *, int,
 	     enum box_lines, const struct grid_cell *, const struct grid_cell *,
 	     const struct grid_cell *);
@@ -3674,9 +3686,9 @@ void		 layout_resize_pane(struct window_pane *, enum layout_type,
 		     int, int);
 void		 layout_resize_pane_to(struct window_pane *, enum layout_type,
 		     u_int);
-void		 layout_resize_floating_pane(struct window_pane *,
+int		 layout_resize_floating_pane(struct window_pane *,
 		     enum layout_type, int, int, char **);
-void		 layout_resize_floating_pane_to(struct window_pane *,
+int		 layout_resize_floating_pane_to(struct window_pane *,
 		     enum layout_type, u_int, char **);
 void		 layout_assign_pane(struct layout_cell *, struct window_pane *,
 		     int);
@@ -3691,7 +3703,10 @@ struct layout_cell *layout_get_tiled_cell(struct cmdq_item *, struct args *,
 		     struct window *, struct window_pane *, int, char **);
 struct layout_cell *layout_get_floating_cell(struct cmdq_item *, struct args *,
 		     enum pane_lines, struct window *, struct window_pane *,
-		     char **);
+		     char **cause);
+int		 layout_floating_args_parse(struct cmdq_item *, struct args *,
+		     enum pane_lines, struct window *, u_int *, u_int *, int *,
+		     int *, char **);
 int		 layout_remove_tile(struct window *, struct layout_cell *);
 
 /* layout-custom.c */
@@ -3762,6 +3777,9 @@ extern const struct window_mode window_buffer_mode;
 
 /* window-tree.c */
 extern const struct window_mode window_tree_mode;
+
+/* window-switch.c */
+extern const struct window_mode window_switch_mode;
 
 /* window-clock.c */
 extern const struct window_mode window_clock_mode;
