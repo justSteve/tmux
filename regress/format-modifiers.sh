@@ -100,6 +100,9 @@ $TMUX set -g @host 'myhost' || exit 1
 $TMUX set -g @ts '1000000000' || exit 1  # 2001-09-09 01:46:40 UTC
 $TMUX set -g @sp 'a b$c' || exit 1     # shell-special characters for q:
 $TMUX set -g @hash 'a#b' || exit 1     # a "#" for q/e:
+$TMUX set -g @sq "a'b" || exit 1       # a single quote for q/s:
+$TMUX set -g @nl "$(printf 'a\nb')" || exit 1
+q_s_nl=$(printf "'a\nb'")
 
 
 # --- Comparisons and matching --------------------------------------------
@@ -153,6 +156,10 @@ test_format "#{!!:non-empty}" "1"
 
 # q: escapes shell special characters with a backslash.
 test_format "#{q:@sp}" 'a\ b\$c'
+# q/s quotes with POSIX shell single quotes.
+test_format "#{q/s:@sp}" "'a b\$c'"
+test_format "#{q/s:@sq}" "'a'\\''b'"
+test_format "#{q/s:@nl}" "$q_s_nl"
 # q/e and q/h escape "#" for the format/style parser by doubling it.
 test_format "#{q/e:@hash}" 'a##b'
 test_format "#{q/h:@hash}" 'a##b'
@@ -519,11 +526,17 @@ $TMUX split-window -h -t zeta:charlie
 $TMUX split-window -h -t zeta:charlie
 test_format "#{P:#{pane_index}}" "012" "zeta:charlie"
 test_format "#{P/r:#{pane_index}}" "210" "zeta:charlie"
-# A pane-sort argument is accepted; for panes only the r (reverse) suffix has an
-# effect, so these all keep the count and exercise the argument branch.
+# Pane sort accepts i (pane-list order) and z (z-order). Other sort letters
+# fall back to the default creation order; r reverses whichever order is used.
 test_format "#{P/i:x}" "xxx" "zeta:charlie"
+test_format "#{P/i:#{pane_index}}" "012" "zeta:charlie"
+test_format "#{P/z:x}" "xxx" "zeta:charlie"
 test_format "#{P/n:x}" "xxx" "zeta:charlie"
 test_format "#{P/t:x}" "xxx" "zeta:charlie"
+$TMUX new-pane -d -t zeta:charlie -x 20 -y 10 -X 1 -Y 1
+test_format "#{P/i:#{pane_index}}" "0123" "zeta:charlie"
+test_format "#{P/z:#{pane_index}}" "3012" "zeta:charlie"
+test_format "#{P/zr:#{pane_index}}" "0123" "zeta:charlie"
 
 # Verbose expansion of the loops, to exercise their logging paths.
 $TMUX display-message -v -p "#{S:#{session_name}}" >/dev/null 2>&1
