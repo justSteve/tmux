@@ -22,6 +22,9 @@
 
 PATH=/bin:/usr/bin
 TERM=screen
+LANG=C.UTF-8
+LC_ALL=C.UTF-8
+export TERM LANG LC_ALL
 
 [ -z "$TEST_TMUX" ] && TEST_TMUX=$(readlink -f ../tmux)
 TMUX="$TEST_TMUX -Ltest -f/dev/null"
@@ -32,7 +35,7 @@ $TMUX kill-server 2>/dev/null
 # Run a command and require that it succeeds.
 check_ok()
 {
-	if ! $TMUX "$@"; then
+	if ! $TMUX "$@" </dev/null; then
 		echo "Command failed (expected success): $*"
 		exit 1
 	fi
@@ -45,7 +48,7 @@ check_fail()
 {
 	exp="$1"
 	shift
-	out=$($TMUX "$@" 2>&1)
+	out=$($TMUX "$@" </dev/null 2>&1)
 	if [ $? -eq 0 ]; then
 		echo "Command succeeded (expected failure): $*"
 		exit 1

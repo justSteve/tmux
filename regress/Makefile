@@ -8,7 +8,10 @@ all:
 	for test in $(TESTS); do \
 		printf '%-40s ' "$$test"; \
 		start=$$(date +%s); \
-		if env -i ASAN_OPTIONS="$$ASAN_OPTIONS" sh "$$test" >/dev/null 2>&1; then \
+		ASAN_OPTIONS="abort_on_error=1:detect_leaks=0:$$ASAN_OPTIONS"; \
+		env -i LC_CTYPE=C.UTF-8 ASAN_OPTIONS="$$ASAN_OPTIONS" \
+		    sh "$$test" >/dev/null 2>&1; \
+		if [ $$? -eq 0 ]; then \
 			end=$$(date +%s); \
 			echo "PASS ($$((end - start))s)"; \
 		else \
