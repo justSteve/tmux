@@ -62,11 +62,9 @@ layout_create_cell(struct layout_cell *lcparent)
 {
 	struct layout_cell	*lc;
 
-	lc = xmalloc(sizeof *lc);
+	lc = xcalloc(1, sizeof *lc);
 	lc->type = LAYOUT_WINDOWPANE;
-	lc->flags = 0;
 	lc->parent = lcparent;
-
 	TAILQ_INIT(&lc->cells);
 
 	lc->sx = UINT_MAX;
@@ -80,8 +78,6 @@ layout_create_cell(struct layout_cell *lcparent)
 
 	lc->saved_xoff = INT_MAX;
 	lc->saved_yoff = INT_MAX;
-
-	lc->wp = NULL;
 
 	return (lc);
 }
@@ -461,7 +457,8 @@ layout_fix_panes(struct window *w, struct window_pane *skip)
 		    layout_add_horizontal_border(w, lc, status)) {
 			if (status == PANE_STATUS_TOP)
 				wp->yoff++;
-			sy--;
+			if (sy > 1)
+				sy--;
 		}
 
 		if (window_pane_scrollbar_reserve(wp)) {
@@ -580,6 +577,7 @@ layout_resize_adjust(struct window *w, struct layout_cell *lc,
     enum layout_type type, int change)
 {
 	struct layout_cell	*lcchild;
+	int			 changed;
 
 	/* Adjust the cell size. */
 	if (type == LAYOUT_LEFTRIGHT)
@@ -613,6 +611,7 @@ layout_resize_adjust(struct window *w, struct layout_cell *lc,
 	 * until no further change is possible.
 	 */
 	while (change != 0) {
+		changed = 0;
 		TAILQ_FOREACH(lcchild, &lc->cells, entry) {
 			if (change == 0)
 				break;
@@ -622,13 +621,17 @@ layout_resize_adjust(struct window *w, struct layout_cell *lc,
 			if (change > 0) {
 				layout_resize_adjust(w, lcchild, type, 1);
 				change--;
+				changed = 1;
 				continue;
 			}
 			if (layout_resize_check(w, lcchild, type) > 0) {
 				layout_resize_adjust(w, lcchild, type, -1);
 				change++;
+				changed = 1;
 			}
 		}
+		if (!changed)
+			break;
 	}
 }
 
@@ -1663,6 +1666,7 @@ layout_get_floating_cell(struct cmdq_item *item, struct args *args,
 	    cause) != 0)
 		return (NULL);
 
+	window_push_zoom(wp->window, 1, args_has(args, 'Z'));
 	lcnew = layout_floating_pane(w, wp, sx, sy, ox, oy);
 	return (lcnew);
 }
