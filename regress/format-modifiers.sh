@@ -101,6 +101,8 @@ $TMUX set -g @ts '1000000000' || exit 1  # 2001-09-09 01:46:40 UTC
 $TMUX set -g @sp 'a b$c' || exit 1     # shell-special characters for q:
 $TMUX set -g @hash 'a#b' || exit 1     # a "#" for q/e:
 $TMUX set -g @sq "a'b" || exit 1       # a single quote for q/s:
+$TMUX set -g @sub 'abABab' || exit 1
+$TMUX set -g @slash 'foo/bar foo/' || exit 1
 $TMUX set -g @nl "$(printf 'a\nb')" || exit 1
 q_s_nl=$(printf "'a\nb'")
 
@@ -289,6 +291,15 @@ if [ -z "$($TMUX display-message -p '#{t/r:@ts}')" ]; then
 	echo "Format test failed for '#{t/r:@ts}': empty result"
 	exit 1
 fi
+# t/d: difference from the current time in seconds.
+diff=$($TMUX display-message -p '#{t/d:@ts}')
+case "$diff" in
+[0-9]*) ;;
+*)
+	echo "Format test failed for '#{t/d:@ts}': expected positive value, got '$diff'"
+	exit 1
+	;;
+esac
 
 # t/f: custom strftime format applied to the variable's time.  Tested in a
 # format_expand context (list-windows -F), where a single strftime specifier is
@@ -324,6 +335,14 @@ done
 # A time in the future has no relative form.
 $TMUX set -g @future "$((now + 100000))"
 test_format "#{t/r:@future}" ""
+diff=$($TMUX display-message -p '#{t/d:@future}')
+case "$diff" in
+-[0-9]*) ;;
+*)
+	echo "Format test failed for '#{t/d:@future}': expected negative value, got '$diff'"
+	exit 1
+	;;
+esac
 
 
 # --- Content search (C) --------------------------------------------------
@@ -426,9 +445,23 @@ test_format "#{=/3/#,:@s}" "abc,"             # escaped comma in the marker
 # The truncation marker is itself expanded as a format.
 test_format "#{=/3/#{l:>}:@s}" "abc>"
 
-# Substitution flags: a third argument of "i" is case-insensitive; an invalid
-# regular expression leaves the text unchanged.
+# Substitution, including regular expressions, back references, different
+# delimiters, empty matches and the "i" case-insensitive flag.
+test_format "#{s/z/X/:@s}" "abcdefghij"
+test_format "#{s/[bd]/X/:@s}" "aXcXefghij"
 test_format "#{s/A/X/i:@s}" "Xbcdefghij"
+test_format "#{s/a(.)/\\1x/i:@sub}" "bxBxbx"
+test_format "#{s/(.)(.)/\\2\\1/:@s}" "badcfehgji"
+test_format "#{s|foo/|bar/|:@slash}" "bar/bar bar/"
+test_format "#{s/^abc/ABC/:@s}" "ABCdefghij"
+test_format "#{s/^(.)(.)/\\2\\1/:@s}" "bacdefghij"
+test_format "#{s/^x*//:@s}" "abcdefghij"
+test_format "#{s/^/X/:@s}" "Xabcdefghij"
+test_format "#{s/^x*/X/:@s}" "Xabcdefghij"
+test_format "#{s/$/X/:@s}" "abcdefghijX"
+test_format "#{s/x*//:@s}" "abcdefghij"
+test_format "#{s/x*/X/:@s}" "aXbXcXdXeXfXgXhXiXjX"
+# An invalid regular expression leaves the text unchanged.
 test_format "#{s/[/X/:@s}" "abcdefghij"
 
 
