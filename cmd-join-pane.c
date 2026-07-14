@@ -1,4 +1,4 @@
-/* $OpenBSD$ */
+/* $OpenBSD: cmd-join-pane.c,v 1.71 2026/07/13 13:01:14 nicm Exp $ */
 
 /*
  * Copyright (c) 2011 George Nachman <tmux@georgester.com>
@@ -186,7 +186,7 @@ cmd_join_pane_place(struct cmdq_item *item, struct winlink *wl,
 		lc->g.yoff = yoff;
 		layout_fix_panes(w, NULL);
 	}
-	notify_window("window-layout-changed", w);
+	events_fire_window("window-layout-changed", w);
 	server_redraw_window(w);
 
 	return (CMD_RETURN_NORMAL);
@@ -256,7 +256,7 @@ cmd_join_pane_move(struct cmdq_item *item, struct args *args,
 		lc->g.xoff = xoff;
 		lc->g.yoff = yoff;
 		layout_fix_panes(w, NULL);
-		notify_window("window-layout-changed", w);
+		events_fire_window("window-layout-changed", w);
 		server_redraw_window(w);
 	}
 
@@ -358,7 +358,7 @@ cmd_join_pane_zindex(struct cmdq_item *item, struct winlink *wl,
 	else
 		TAILQ_INSERT_TAIL(&w->z_index, wp, zentry);
 
-	notify_window("window-layout-changed", w);
+	events_fire_window("window-layout-changed", w);
 	server_redraw_window(w);
 
 	return (CMD_RETURN_NORMAL);
@@ -397,7 +397,7 @@ cmd_join_pane_tile(struct cmdq_item *item, struct args *args, struct window *w,
 		window_set_active_pane(w, wp, 1);
 	layout_fix_offsets(w);
 	layout_fix_panes(w, NULL);
-	notify_window("window-layout-changed", w);
+	events_fire_window("window-layout-changed", w);
 	server_redraw_window(w);
 
 	return (CMD_RETURN_NORMAL);
@@ -458,6 +458,13 @@ cmd_join_pane_exec(struct cmd *self, struct cmdq_item *item)
 		return (CMD_RETURN_ERROR);
 	}
 
+	if (args_has(args, 'h'))
+		flags |= SPAWN_HORIZONTAL;
+	if (args_has(args, 'b'))
+		flags |= SPAWN_BEFORE;
+	if (args_has(args, 'f'))
+		flags |= SPAWN_FULLSIZE;
+
 	lc = layout_get_tiled_cell(item, args, dst_w, dst_wp, flags, &cause);
 	if (cause != NULL) {
 		cmdq_error(item, "size or position %s", cause);
@@ -498,11 +505,12 @@ cmd_join_pane_exec(struct cmd *self, struct cmdq_item *item)
 	} else
 		server_status_session(dst_s);
 
+	window_fire_pane_moved(src_wp, src_w, src_wl->idx, dst_w, dst_idx);
 	if (window_count_panes(src_w, 1) == 0)
 		server_kill_window(src_w, 1);
 	else
-		notify_window("window-layout-changed", src_w);
-	notify_window("window-layout-changed", dst_w);
+		events_fire_window("window-layout-changed", src_w);
+	events_fire_window("window-layout-changed", dst_w);
 
 	return (CMD_RETURN_NORMAL);
 }
