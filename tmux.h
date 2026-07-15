@@ -1,4 +1,4 @@
-/* $OpenBSD: tmux.h,v 1.1401 2026/07/13 16:07:47 nicm Exp $ */
+/* $OpenBSD: tmux.h,v 1.1404 2026/07/14 19:07:03 nicm Exp $ */
 
 /*
  * Copyright (c) 2007 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -1167,8 +1167,13 @@ struct window_mode {
 	const char	*name;
 	const char	*default_format;
 
+	int		 flags;
+#define WINDOW_MODE_HIDE_PANE_STATUS 0x1
+#define WINDOW_MODE_NO_STACK 0x2
+
 	struct screen	*(*init)(struct window_mode_entry *,
-			     struct cmd_find_state *, struct args *);
+			     struct cmdq_item *, struct cmd_find_state *,
+			     struct args *);
 	void		 (*free)(struct window_mode_entry *);
 	void		 (*resize)(struct window_mode_entry *, u_int, u_int);
 	void		 (*update)(struct window_mode_entry *);
@@ -1429,6 +1434,10 @@ struct window {
 	u_int			 new_ypixel;
 
 	uint64_t		 redraw_scene_generation;
+
+	struct menu_data	*menu;
+	u_int			 menu_last_px;
+	u_int			 menu_last_py;
 
 	u_int			 last_new_pane_x;
 	u_int			 last_new_pane_y;
@@ -2254,7 +2263,7 @@ struct client {
 #define CLIENT_CONTROL_NOOUTPUT 0x4000000
 #define CLIENT_DEFAULTSOCKET 0x8000000
 #define CLIENT_STARTSERVER 0x10000000
-/* 0x20000000 unused */
+#define CLIENT_REDRAWMENU 0x20000000
 #define CLIENT_NOFORK 0x40000000
 #define CLIENT_ACTIVEPANE 0x80000000ULL
 #define CLIENT_CONTROL_PAUSEAFTER 0x100000000ULL
@@ -2270,7 +2279,8 @@ struct client {
 	 CLIENT_REDRAWSTATUS|		\
 	 CLIENT_REDRAWSTATUSALWAYS|	\
 	 CLIENT_REDRAWBORDERS|		\
-	 CLIENT_REDRAWOVERLAY)
+	 CLIENT_REDRAWOVERLAY|		\
+	 CLIENT_REDRAWMENU)
 #define CLIENT_UNATTACHEDFLAGS	\
 	(CLIENT_DEAD|		\
 	 CLIENT_SUSPENDED|	\
@@ -2323,9 +2333,6 @@ struct client {
 	overlay_resize_cb	 overlay_resize;
 	void			*overlay_data;
 	struct event		 overlay_timer;
-
-	u_int			 menu_last_px;
-	u_int			 menu_last_py;
 
 	struct client_files	 files;
 	u_int			 source_file_depth;
@@ -2750,6 +2757,7 @@ char	*format_trim_right(const char *, u_int);
 
 /* hooks.c */
 void	 hooks_add_event(const char *);
+int	 hooks_is_event(const char *);
 int	 hooks_valid_event_name(const char *);
 void	 hooks_build_events(void);
 void	 hooks_run(struct cmdq_item *, const char *);
@@ -3153,6 +3161,7 @@ void		  cmdq_merge_formats(struct cmdq_item *, struct format_tree *);
 struct cmdq_list *cmdq_new(void);
 void cmdq_free(struct cmdq_list *);
 const char	 *cmdq_get_name(struct cmdq_item *);
+struct cmd	 *cmdq_get_cmd(struct cmdq_item *);
 struct client	 *cmdq_get_client(struct cmdq_item *);
 struct client	 *cmdq_get_target_client(struct cmdq_item *);
 struct cmdq_state *cmdq_get_state(struct cmdq_item *);
@@ -3310,6 +3319,7 @@ void	 server_redraw_session_group(struct session *);
 void	 server_status_session(struct session *);
 void	 server_status_session_group(struct session *);
 void	 server_redraw_window(struct window *);
+void	 server_redraw_window_menu(struct window *);
 void	 server_redraw_window_borders(struct window *);
 void	 server_status_window(struct window *);
 void	 server_lock(void);
@@ -3710,7 +3720,7 @@ void		 window_pane_clear_resizes(struct window_pane *,
 		     struct window_pane_resize *);
 int		 window_pane_set_mode(struct window_pane *,
 		     struct window_pane *, const struct window_mode *,
-		     struct cmd_find_state *, struct args *);
+		     struct cmdq_item *, struct cmd_find_state *, struct args *);
 void		 window_pane_reset_mode(struct window_pane *);
 void		 window_pane_reset_mode_all(struct window_pane *);
 int		 window_pane_key(struct window_pane *, struct client *,
@@ -3812,6 +3822,8 @@ void		 layout_make_leaf(struct layout_cell *, struct window_pane *);
 void		 layout_make_node(struct layout_cell *, enum layout_type);
 void		 layout_fix_zindexes(struct window *, struct layout_cell *);
 int		 layout_cell_is_tiled(struct layout_cell *);
+int		 layout_add_horizontal_border(struct layout_cell *,
+		     struct layout_cell *, int);
 void		 layout_fix_offsets(struct window *);
 void		 layout_fix_panes(struct window *, struct window_pane *);
 void		 layout_resize_adjust(struct window *, struct layout_cell *,
@@ -3934,6 +3946,9 @@ extern const struct window_mode window_switch_mode;
 /* window-clock.c */
 extern const struct window_mode window_clock_mode;
 extern const char window_clock_table[14][5][5];
+
+/* window-panes.c */
+extern const struct window_mode window_panes_mode;
 
 /* window-client.c */
 extern const struct window_mode window_client_mode;
@@ -4102,20 +4117,21 @@ void		 menu_add_item(struct menu *, const struct menu_item *,
 		    struct cmdq_item *, struct client *,
 		    struct cmd_find_state *);
 void		 menu_free(struct menu *);
-struct menu_data *menu_prepare(struct menu *, int, int, struct cmdq_item *,
-		    u_int, u_int, struct client *, enum box_lines, const char *,
-		    const char *, const char *, struct cmd_find_state *,
-		    menu_choice_cb, void *);
 int		 menu_display(struct menu *, int, int, struct cmdq_item *,
 		    u_int, u_int, struct client *, enum box_lines, const char *,
 		    const char *, const char *, struct cmd_find_state *,
 		    menu_choice_cb, void *);
-struct screen	*menu_mode_cb(struct client *, void *, u_int *, u_int *);
-struct visible_ranges *menu_check_cb(struct client *, void *, u_int, u_int,
-		    u_int);
-void		 menu_draw_cb(struct client *, void *);
-void		 menu_free_cb(struct client *, void *);
-int		 menu_key_cb(struct client *, void *, struct key_event *);
+void		 menu_close(struct window *);
+void		 menu_destroy(struct window *);
+void		 menu_update(struct menu_data *);
+struct screen	*menu_screen(struct menu_data *);
+u_int		 menu_width(struct menu_data *);
+u_int		 menu_height(struct menu_data *);
+u_int		 menu_x(struct menu_data *);
+u_int		 menu_y(struct menu_data *);
+void		 menu_get_cursor(struct menu_data *, u_int *, u_int *);
+void		 menu_resize(struct menu_data *, struct window *);
+int		 menu_key(struct client *, struct menu_data *, struct key_event *);
 
 /* popup.c */
 #define POPUP_CLOSEEXIT 0x1
