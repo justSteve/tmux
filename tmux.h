@@ -1,4 +1,4 @@
-/* $OpenBSD: tmux.h,v 1.1406 2026/07/15 13:02:33 nicm Exp $ */
+/* $OpenBSD: tmux.h,v 1.1409 2026/07/17 16:03:15 nicm Exp $ */
 
 /*
  * Copyright (c) 2007 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -1311,6 +1311,7 @@ struct window_pane {
 #define PANE_DESTROYED 0x10000
 #define PANE_CMDRUNNING 0x20000
 #define PANE_ACTIVITY 0x40000
+#define PANE_NORESIZETRIM 0x80000
 
 	bitstr_t	*sync_dirty;
 	u_int		 sync_dirty_size;
@@ -2074,18 +2075,6 @@ struct client_file {
 };
 RB_HEAD(client_files, client_file);
 
-/* Client window. */
-struct client_window {
-	u_int			 window;
-	struct window_pane	*pane;
-
-	u_int			 sx;
-	u_int			 sy;
-
-	RB_ENTRY(client_window)	 entry;
-};
-RB_HEAD(client_windows, client_window);
-
 /* Maximum time to be pasting. */
 #define CLIENT_PASTE_TIME_LIMIT 5
 
@@ -2189,8 +2178,6 @@ struct client {
 	const char		*user;
 	struct cmdq_list	*queue;
 
-	struct client_windows	 windows;
-
 	struct control_state	*control_state;
 	u_int			 pause_age;
 
@@ -2271,7 +2258,7 @@ struct client {
 #define CLIENT_STARTSERVER 0x10000000
 #define CLIENT_REDRAWMENU 0x20000000
 #define CLIENT_NOFORK 0x40000000
-#define CLIENT_ACTIVEPANE 0x80000000ULL
+/* 0x80000000ULL unused */
 #define CLIENT_CONTROL_PAUSEAFTER 0x100000000ULL
 #define CLIENT_CONTROL_WAITEXIT 0x200000000ULL
 #define CLIENT_WINDOWSIZECHANGED 0x400000000ULL
@@ -3282,7 +3269,6 @@ void printflike(1, 2) server_add_message(const char *, ...);
 int	 server_create_socket(uint64_t, char **);
 
 /* server-client.c */
-RB_PROTOTYPE(client_windows, client_window, entry, server_client_window_cmp);
 u_int	 server_client_how_many(void);
 void	 server_client_set_overlay(struct client *, u_int, overlay_check_cb,
 	     overlay_mode_cb, overlay_draw_cb, overlay_key_cb,
@@ -3310,10 +3296,6 @@ void	 server_client_loop(void);
 const char *server_client_get_cwd(struct client *, struct session *);
 void	 server_client_set_flags(struct client *, const char *);
 const char *server_client_get_flags(struct client *);
-struct client_window *server_client_get_client_window(struct client *, u_int);
-struct client_window *server_client_add_client_window(struct client *, u_int);
-struct window_pane *server_client_get_pane(struct client *);
-void	 server_client_set_pane(struct client *, struct window_pane *);
 void	 server_client_remove_pane(struct window_pane *);
 void	 server_client_print(struct client *, int, struct evbuffer *);
 
@@ -4009,6 +3991,9 @@ void	control_set_pane_on(struct client *, struct window_pane *);
 void	control_set_pane_off(struct client *, struct window_pane *);
 void	control_continue_pane(struct client *, struct window_pane *);
 void	control_pause_pane(struct client *, struct window_pane *);
+void	control_set_window_size(struct client *, u_int, u_int, u_int);
+int	control_get_window_size(struct client *, u_int, u_int *, u_int *);
+void	control_clear_window_size(struct client *, u_int);
 struct window_pane_offset *control_pane_offset(struct client *,
 	   struct window_pane *, int *);
 void	control_reset_offsets(struct client *);
